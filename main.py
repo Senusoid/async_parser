@@ -1,5 +1,6 @@
 import asyncio
 import json
+import os
 from datetime import datetime
 from json import JSONDecodeError
 from aiohttp import ClientSession
@@ -41,13 +42,24 @@ async def fetch_url(url):
     print(f'{url} - done')
 
 async def track_schedule(loop):
-    parsed = {}
+    config_data, parsed, change_time = {}, {}, None
+
     while True:
         try:
-            with open(CONFIG_FILE) as config_file:
-                config_data = json.load(config_file)
-        except JSONDecodeError as e:
-            print('qweeq')
+            new_time = os.stat(CONFIG_FILE).st_mtime
+        except FileNotFoundError as e:
+            print(e)
+            continue
+
+        if change_time != new_time:
+            change_time = new_time
+            parsed = {}
+            try:
+                with open(CONFIG_FILE) as config_file:
+                    config_data = json.load(config_file)
+            except JSONDecodeError as e:
+                print(e)
+                continue
 
         for task_name, task in config_data.items():
             export_time = datetime.strptime(task['date'], DATETIME_FORMAT)
@@ -57,7 +69,7 @@ async def track_schedule(loop):
             parsed[task_name] = task['date']
             [asyncio.ensure_future(fetch_url(url)) for url in task['urls']]
 
-        await asyncio.sleep(3)
+        await asyncio.sleep(60)
 
 def main():
     loop = asyncio.get_event_loop()
